@@ -8,6 +8,8 @@ import time
 from collections import Counter
 from datetime import datetime
 
+os.environ["STREAMLIT_PANDAS_BACKEND"] = "pandas"
+
 # --- 1. KONFIGURACJA STRONY (Kasynowy Vibe) ---
 st.set_page_config(
     page_title="Lotto Casino 777",
@@ -313,4 +315,5 @@ def main():
             st.success("Zapisano!")
 
 if __name__ == "__main__":
+
     main()
