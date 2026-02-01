@@ -4,147 +4,60 @@ import re
 import random
 import os
 import pandas as pd
-import time
 from collections import Counter
-from datetime import datetime
 
-os.environ["STREAMLIT_PANDAS_BACKEND"] = "pandas"
-
-# --- 1. KONFIGURACJA STRONY (Kasynowy Vibe) ---
+# --- KONFIGURACJA DLA MINI LOTTO ---
 st.set_page_config(
-    page_title="Lotto Casino 777",
+    page_title="Mini Mini v2.0",
     page_icon="🎰",
-    layout="centered" # Wyśrodkowany układ jak w maszynie
+    layout="centered"
 )
 
-FILE_PATH = "999los.pdf"
-
-# --- 2. STYLIZACJA (Neon, Złoto, Czerń) ---
-def local_css():
-    st.markdown("""
+# --- STYL ---
+st.markdown("""
     <style>
-    /* Tło - Głęboka czerń */
-    .stApp {
-        background-color: #000000;
-        background-image: linear-gradient(145deg, #1a0b00 0%, #000000 74%);
-        color: #FFD700;
+    .stApp { background-color: #262730; color: white; }
+    .big-number {
+        font-size: 24px; font-weight: bold; color: white;
+        background-color: #e91e63; /* Różowy dla Mini */
+        border-radius: 50%;
+        width: 50px; height: 50px; display: inline-flex;
+        justify-content: center; align-items: center;
+        margin: 5px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+        border: 2px solid #f48fb1;
     }
-    
-    /* Nagłówek - Neonowy styl */
-    h1 {
-        text-align: center;
-        color: #FF0055 !important;
-        text-shadow: 0 0 10px #FF0055, 0 0 20px #FF0055;
-        font-family: 'Courier New', Courier, monospace;
-        font-weight: 900;
-        font-size: 3rem;
-        letter-spacing: 5px;
-    }
-    
-    /* Przycisk SPIN - Wygląd dźwigni */
-    div.stButton > button {
-        width: 100%;
-        background: linear-gradient(0deg, #cc0000 0%, #ff3333 100%);
-        color: white !important;
-        font-size: 24px;
-        font-weight: bold;
-        border: 4px solid #800000 !important;
-        border-radius: 15px;
-        box-shadow: 0 10px 0 #500000, 0 15px 20px rgba(0,0,0,0.5);
-        transition: all 0.1s;
-        text-transform: uppercase;
-        margin-top: 20px;
-    }
-    div.stButton > button:active {
-        transform: translateY(10px);
-        box-shadow: 0 0 0 #500000, 0 0 0 rgba(0,0,0,0);
-    }
-    div.stButton > button:hover {
-        background: linear-gradient(0deg, #ff0000 0%, #ff6666 100%);
-    }
-
-    /* Wyświetlacz Maszyny (Sloty) */
-    .slot-container {
-        display: flex;
-        justify-content: center;
-        background-color: #111;
-        padding: 20px;
-        border: 10px solid #DAA520; /* Złota ramka */
-        border-radius: 20px;
-        box-shadow: inset 0 0 30px #000;
-        margin-bottom: 20px;
-    }
-    
-    .slot-window {
-        background-color: #fff;
-        color: #000;
-        width: 60px;
-        height: 80px;
-        line-height: 80px;
-        margin: 0 5px;
-        text-align: center;
-        font-size: 35px;
-        font-weight: bold;
-        border: 3px solid #555;
-        border-radius: 5px;
-        box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-        font-family: 'Arial Black', sans-serif;
-    }
-    
-    /* Efekt wygranej (miganie) */
-    @keyframes blinker {
-        50% { opacity: 0.5; box-shadow: 0 0 20px #FFD700; }
-    }
-    .winner {
-        border-color: #FFD700;
-        color: #FF0055;
-        animation: blinker 1s linear infinite;
-    }
-    
-    .stat-box {
-        background-color: #222;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #444;
-        margin-top: 10px;
-        font-size: 14px;
-        color: #ccc;
+    .metric-box {
+        background-color: #333; padding: 10px; border-radius: 8px;
+        text-align: center; border: 1px solid #444; margin-bottom: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-local_css()
-
-# --- 3. PARSER PDF ---
+# --- FUNKCJE ---
 @st.cache_data
-def load_data(path):
-    if not os.path.exists(path):
+def load_data(file_path):
+    if not os.path.exists(file_path):
         return []
-    
     draws = []
     try:
-        reader = pypdf.PdfReader(path)
+        reader = pypdf.PdfReader(file_path)
         for page in reader.pages:
             text = page.extract_text() or ""
             tokens = re.findall(r'\d+', text)
-            
             i = 0
             while i < len(tokens):
                 candidates = []
                 offset = 0
-                # Próbujemy znaleźć ciąg 5 liczb <= 50 (dla Mini Lotto 42, dla Euro 50)
-                # Zakładamy bezpiecznie max 50
+                # Mini Lotto: 5 liczb z zakresu 1-42
                 while len(candidates) < 5 and (i + offset) < len(tokens):
                     try:
                         val = int(tokens[i+offset])
-                        # Filtrujemy ID losowania (zazwyczaj duże liczby)
-                        if 1 <= val <= 50: 
+                        if 1 <= val <= 42:
                             candidates.append(val)
                         else:
-                            if candidates: break 
+                            if candidates: break
                     except: break
                     offset += 1
-                
                 if len(candidates) == 5:
                     draws.append(candidates)
                     i += offset
@@ -152,168 +65,100 @@ def load_data(path):
                     i += 1
     except:
         return []
-    
-    # Zwracamy listę losowań (najnowsze na początku lub na końcu - zakładamy kolejność z pliku)
-    # Dla logiki "ostatnie 3 losowania" kolejność jest kluczowa.
     return draws
 
-# --- 4. LOGIKA KASYNA ---
-def casino_algorithm(draws):
-    if not draws:
-        return sorted(random.sample(range(1, 43), 5)), "Losowy (Brak danych)"
+def get_hot_numbers(draws):
+    flat_data = [num for sublist in draws for num in sublist]
+    counts = Counter(flat_data)
+    # Wagi dla liczb 1-42
+    weights = [counts.get(i, 1) for i in range(1, 43)]
+    return weights
 
-    # 1. Statystyka Częstotliwości (Globalna)
-    flat_all = [n for d in draws for n in d]
-    counts = Counter(flat_all)
-    total_draws = len(draws)
+# --- SMART ALGORYTM MINI ---
+def smart_generate_mini(weights):
+    population = list(range(1, 43))
     
-    # 2. Sprawdź, kiedy liczba wystąpiła ostatnio
-    # Szukamy od końca listy (zakładamy, że koniec listy to najnowsze, jeśli parser czyta w dół)
-    # Dla pewności odwróćmy, żeby indeks 0 to było najnowsze losowanie
-    # (Zależy od struktury PDF, ale zazwyczaj czyta od góry)
-    # Przyjmijmy: Ostatnie wczytane = Najnowsze.
-    
-    last_seen_index = {} # liczba -> ile losowań temu (0 = było w ostatnim)
-    
-    # Iterujemy od tyłu (najnowsze losowania)
-    reversed_draws = list(reversed(draws))
-    
-    for idx, draw in enumerate(reversed_draws):
-        for num in draw:
-            if num not in last_seen_index:
-                last_seen_index[num] = idx
-                
-    # 3. Wybór kandydatów
-    candidates_pool = []
-    
-    # Próg bycia "Częstym" (np. górne 50% liczb)
-    avg_freq = sum(counts.values()) / len(counts)
-    
-    for num in range(1, 43): # Zakres Mini Lotto (lub 50 dla Euro)
-        # Ile razy padła
-        freq = counts.get(num, 0)
-        # Ile losowań temu (jeśli nie było wcale, dajemy 999)
-        ago = last_seen_index.get(num, 999)
+    # Próbujemy max 2000 razy znaleźć idealny zestaw
+    for _ in range(2000):
+        # 1. Losowanie ważone (Hot Numbers)
+        stronger_weights = [w**1.5 for w in weights]
         
-        weight = freq # Podstawowa waga to częstotliwość
+        candidates = set()
+        while len(candidates) < 5:
+            c = random.choices(population, weights=stronger_weights, k=1)[0]
+            candidates.add(c)
         
-        # LOGIKA UŻYTKOWNIKA:
-        # "jeżeli nie widniała ponad 3 losowania i była częsta"
-        is_frequent = freq > avg_freq
-        is_due = ago > 3
+        nums = sorted(list(candidates))
         
-        if is_frequent and is_due:
-            # Super Bonus! To jest nasz "Pewniak"
-            weight *= 5 # Zwiększamy szansę 5-krotnie
-            tag = "🔥" # Gorący i Śpiący
-        elif is_frequent:
-            weight *= 1.5 # Tylko częsty
-            tag = "☀️"
-        elif is_due:
-            weight *= 1.2 # Tylko śpiący
-            tag = "💤"
-        else:
-            weight *= 0.5 # Rzadki i był niedawno (zimny)
-            tag = "❄️"
+        # --- FILTRY MINI LOTTO ---
+        
+        # 1. Suma (Statystyczna średnia to ~107. Celujemy w 80-135)
+        total_sum = sum(nums)
+        if not (80 <= total_sum <= 135):
+            continue 
             
-        candidates_pool.append({
-            "num": num,
-            "weight": weight,
-            "tag": tag,
-            "ago": ago
-        })
-    
-    # 4. Losowanie ważone
-    # Wybieramy 5 liczb na podstawie wag
-    chosen = []
-    population = [c["num"] for c in candidates_pool]
-    weights = [c["weight"] for c in candidates_pool]
-    
-    while len(chosen) < 5:
-        pick = random.choices(population, weights=weights, k=1)[0]
-        if pick not in chosen:
-            chosen.append(pick)
+        # 2. Parzystość (Unikamy 5:0 i 0:5)
+        even_count = sum(1 for n in nums if n % 2 == 0)
+        if even_count == 0 or even_count == 5:
+            continue
             
-    chosen.sort()
-    
-    # Info o wybranych dla użytkownika
-    info = []
-    for num in chosen:
-        cand = next(c for c in candidates_pool if c["num"] == num)
-        info.append(cand)
+        # 3. Niskie/Wysokie (Podział w Mini to 21. Unikamy wszystkich niskich/wysokich)
+        low_count = sum(1 for n in nums if n <= 21)
+        if low_count == 0 or low_count == 5:
+            continue
+            
+        # 4. Kolejność (Max 2 liczby obok siebie, np. 5,6 jest OK, ale 5,6,7 odrzucamy)
+        consecutive = 0
+        max_consecutive = 0
+        for i in range(len(nums)-1):
+            if nums[i+1] == nums[i] + 1:
+                consecutive += 1
+            else:
+                consecutive = 0
+            max_consecutive = max(max_consecutive, consecutive)
         
-    return chosen, info
+        if max_consecutive >= 2: 
+            continue
+            
+        return nums, total_sum, even_count
 
-# --- 5. INTERFEJS ---
+    # Fallback
+    return nums, sum(nums), 0
+
+# --- INTERFEJS ---
 def main():
-    st.title("🎰 CASINO LOTTO 🎰")
-    st.markdown("<p style='text-align: center; color: #aaa;'>ALGORYTM 'ŚPIĄCYCH GIGANTÓW'</p>", unsafe_allow_html=True)
-
-    draws = load_data(FILE_PATH)
+    st.title("🎰 Mini Mini v2.0")
+    st.markdown("Algorytm Mini Lotto z filtrem Sumy (80-135) i Rozkładu.")
+    
+    FILE_NAME = "999los.pdf" # Plik z danymi Mini Lotto
+    
+    draws = load_data(FILE_NAME)
+    
     if not draws:
-        st.error(f"Nie znaleziono pliku {FILE_PATH}!")
-        return
+        st.warning(f"⚠️ Brak pliku {FILE_NAME}. Działam na trybie losowym.")
+        weights = [1] * 42
+    else:
+        st.success(f"Analiza bazy: {len(draws)} losowań Mini Lotto.")
+        weights = get_hot_numbers(draws)
 
-    # Stan maszyny
-    if 'last_spin' not in st.session_state:
-        st.session_state['last_spin'] = [7, 7, 7, 7, 7]
-    if 'spin_info' not in st.session_state:
-        st.session_state['spin_info'] = None
-
-    # Dźwignia
-    if st.button("POCIĄGNIJ DŹWIGNIĘ 🕹️"):
-        with st.spinner("Bębny się kręcą..."):
-            time.sleep(1.5) # Budowanie napięcia
-            nums, details = casino_algorithm(draws)
-            st.session_state['last_spin'] = nums
-            st.session_state['spin_info'] = details
-
-    # Wyświetlacz wyników
-    nums = st.session_state['last_spin']
-    
-    st.markdown(f"""
-    <div class="slot-container">
-        <div class="slot-window">{nums[0]}</div>
-        <div class="slot-window">{nums[1]}</div>
-        <div class="slot-window">{nums[2]}</div>
-        <div class="slot-window">{nums[3]}</div>
-        <div class="slot-window">{nums[4]}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Sekcja Wyjaśnienia (Dlaczego te liczby?)
-    if st.session_state['spin_info']:
-        st.markdown("### 🕵️ ANALIZA WYGRANEJ:")
-        
+    if st.button("WYGENERUJ SMART KUPON", use_container_width=True):
+        with st.spinner("Szukam idealnego rozkładu..."):
+            result, s_sum, s_even = smart_generate_mini(weights)
+            
+        # Kule
         cols = st.columns(5)
-        for i, info in enumerate(st.session_state['spin_info']):
-            with cols[i]:
-                # Kolorowanie w zależności od typu
-                color = "#fff"
-                if info['tag'] == "🔥": color = "#FF0055" # Super
-                elif info['tag'] == "☀️": color = "#FFD700" # Częsty
-                
-                st.markdown(f"""
-                <div class="stat-box" style="border-color: {color};">
-                    <div style="font-size: 20px; font-weight: bold; color: {color}; text-align: center;">{info['num']}</div>
-                    <hr style="margin: 5px 0; border-color: #444;">
-                    Typ: {info['tag']}<br>
-                    Ostatnio: {info['ago']} los.<br>
-                </div>
-                """, unsafe_allow_html=True)
-                
-        st.caption("""
-        🔥 **Ogień:** Liczba częsta, która "śpi" (nie było jej >3 losowania). System ją wybrał!
-        ☀️ **Słońce:** Bardzo częsta liczba.
-        💤 **Sen:** Liczba rzadka, ale dawno niewylosowana.
-        """)
+        for i, n in enumerate(result):
+            cols[i].markdown(f"<div class='big-number'>{n}</div>", unsafe_allow_html=True)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        # Zapisz wynik
-        if st.button("💾 ZAPISZ KUPON"):
-            with open("Kupon_Casino.txt", "a") as f:
-                f.write(f"CASINO SPIN: {nums} | Data: {datetime.now()}\n")
-            st.success("Zapisano!")
+        # Statystyki wyboru
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(f"<div class='metric-box'>📐 Suma: <b>{s_sum}</b><br><small>(Norma: 80-135)</small></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='metric-box'>⚖️ Parzyste: <b>{s_even}/5</b><br><small>(Balans)</small></div>", unsafe_allow_html=True)
+        c3.markdown(f"<div class='metric-box'>🔥 Baza<br><small>Statystyka + Filtr</small></div>", unsafe_allow_html=True)
+        
+        st.caption("System odrzucił kombinacje o zbyt niskim prawdopodobieństwie (skrajne sumy, ciągi liczb).")
 
 if __name__ == "__main__":
-
     main()
